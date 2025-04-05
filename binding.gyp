@@ -1,7 +1,7 @@
 {
   "targets": [
     {
-      "target_name": "main",
+      "target_name": "7zlib-impl",
       "dependencies": [
         "./bit7z/bit7z.gyp:bit7z"
       ],
