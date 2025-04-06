@@ -1,12 +1,12 @@
 {
-  "name": "7zlib",
+  "name": "bit7z",
   "author": "RedHolms",
   "description": "Node wrapper for bit7z library",
   "license": "Free to use, edit and distribute",
   "version": "1.0.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/redholms/node-7zlib.git"
+    "url": "https://github.com/redholms/node-bit7z.git"
   },
   "keywords": [
     "7z",
@@ -27,15 +27,17 @@
     }
   },
   "scripts": {
-    "prepare": "node ./bit7z-builder.js"
+    "install": "npm run rebuild",
+    "configure": "node-gyp configure",
+    "rebuild": "node-gyp rebuild",
+    "build": "node-gyp build",
+    "clean": "node-gyp clean"
   },
   "dependencies": {
     "bindings": "^1.5.0",
     "node-addon-api": "^8.3.1",
+    "node-gyp": "^11.2.0",
     "prebuild-install": "^7.1.3"
-  },
-  "devDependencies": {
-    "prebuild": "^13.0.1"
   },
   "files": [
     "binding.gyp",

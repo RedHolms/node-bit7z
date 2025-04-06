@@ -5,8 +5,9 @@
       "dependencies": [
         "./bit7z/bit7z.gyp:bit7z"
       ],
-      "cflags": [ "-fno-exceptions", "-std=c++17" ],
-      "cflags_cc": [ "-fno-exceptions", "-std=c++17" ],
+      "cflags": [ "-std=c++17" ],
+      "cflags_cc": [ "-std=c++17" ],
+      "msbuild_toolset": "v141",
       "msvs_settings": {
         "VCCLCompilerTool": {
           "ExceptionHandling": 1, # Sync
@@ -20,8 +21,7 @@
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],
-      "libraries": [
-      ],
+      "defines": [ "NAPI_DISABLE_CPP_EXCEPTIONS" ]
     }
   ]
 }

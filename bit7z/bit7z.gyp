@@ -79,7 +79,8 @@
         "../7zip/CPP"
       ],
       "direct_dependent_settings": {
-        "include_dirs": [ "include" ]
+        "include_dirs": [ "include" ],
+        "defines": [ "UNICODE", "_UNICODE" ]
       },
       "defines": [ "UNICODE", "_UNICODE" ]
     }
