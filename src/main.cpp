@@ -84,9 +84,16 @@ class BitArchiveWriter : public Napi::ObjectWrap<BitArchiveWriter> {
   Wrapper(BitArchiveWriter, {
     Wmethod(addDirectory),
     Wmethod(addFile),
-    Wmethod(compressTo)
+    Wmethod(compressTo),
+    Wmethod(setProgressCallback),
+    Wmethod(setTotalCallback)
   })
   Wend
+
+  Napi::Reference<Napi::Function> m_progressCallback;
+  Napi::ThreadSafeFunction m_progressCallbackLock;
+  Napi::Reference<Napi::Function> m_totalCallback;
+  Napi::ThreadSafeFunction m_totalCallbackLock;
 
 public:
   BitArchiveWriter(const Napi::CallbackInfo& info) : Napi::ObjectWrap<BitArchiveWriter>(info) {
@@ -94,6 +101,25 @@ public:
     Nclass_arg(lib, Bit7zLibrary);
     Nclass_arg(format, BitInOutFormat);
     Winit(*lib, *format);
+
+    m->setProgressCallback([this](uint64_t done) -> bool {
+      bool returnValue = true;
+      if (m_progressCallbackLock) {
+        m_progressCallbackLock.BlockingCall([done, &returnValue](Napi::Env env, Napi::Function func) {
+          Napi::Value value = func.Call({ Napi::Number::New(env, done) });
+          if (value.IsBoolean())
+            returnValue = value.As<Napi::Boolean>().Value();
+        });
+      }
+      return returnValue;
+    });
+    m->setTotalCallback([this](uint64_t total) {
+      if (m_totalCallbackLock) {
+        m_totalCallbackLock.BlockingCall([total](Napi::Env env, Napi::Function func) {
+          func.Call({ Napi::Number::New(env, total) });
+        });
+      }
+    });
   }
 
   Napi::Value addDirectory(const Napi::CallbackInfo& info) {
@@ -118,11 +144,33 @@ public:
   Napi::Value compressTo(const Napi::CallbackInfo& info) {
     Ncallback;
     Nstring_arg(outFilePath);
+    if (m_progressCallback) {
+      m_progressCallbackLock = Napi::ThreadSafeFunction::New(m_progressCallback.Env(), m_progressCallback.Value(), "bit7z Progress Callback", 0, 1);
+      m_totalCallbackLock = Napi::ThreadSafeFunction::New(m_totalCallback.Env(), m_totalCallback.Value(), "bit7z Total Callback", 0, 1);
+    }
     auto work = new Bit7ZGenericWorker(info.Env(), [this, outFilePath]() {
+      ScopeExit _scope{ [this]() {
+        if (m_progressCallbackLock) m_progressCallbackLock.Release();
+        if (m_totalCallbackLock) m_totalCallbackLock.Release();
+      } };
       m->compressTo(outFilePath);
     });
     work->Queue();
     return work->GetPromise();
+  }
+
+  Napi::Value setProgressCallback(const Napi::CallbackInfo& info) {
+    Ncallback;
+    Nfunction(callback);
+    m_progressCallback = Napi::Reference<Napi::Function>::New(callback);
+    return info.Env().Undefined();
+  }
+
+  Napi::Value setTotalCallback(const Napi::CallbackInfo& info) {
+    Ncallback;
+    Nfunction(callback);
+    m_totalCallback = Napi::Reference<Napi::Function>::New(callback);
+    return info.Env().Undefined();
   }
 };
 

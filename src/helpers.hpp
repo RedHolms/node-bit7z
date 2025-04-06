@@ -47,6 +47,12 @@
     name = info[__argidx].As<Napi::String>().Utf8Value(); \
   ++__argidx
 
+// Napi::Function
+#define Nfunction(name,...)                                           \
+  if (!info[__argidx].IsFunction())                                   \
+    Nthrow(Napi::Error::New(__napienv, #name " must be a function")); \
+  auto name = info[__argidx].As<Napi::Function>(); ++__argidx
+
 // T*
 #define Nclass_arg(name,T)                                             \
   if (!info[__argidx].IsObject() ||                                    \
@@ -84,8 +90,17 @@ public:
   }
 };
 
-/// Tools to build C++ classes wrappers for bit7z
+// Calls any function at scope exit
+template <typename FnT>
+class ScopeExit {
+private:
+  FnT m_fn;
+public:
+  inline ScopeExit(const FnT& fn) : m_fn(fn) {}
+  inline ~ScopeExit() { m_fn(); }
+};
 
+/// Tools to build C++ classes wrappers for bit7z
 
 #define _Wrapper_(C,...)                                                      \
 private:                                                                      \

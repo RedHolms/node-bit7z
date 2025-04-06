@@ -45,4 +45,6 @@ export class BitArchiveWriter {
   addDirectory(directoryPath: string): void;
   addFile(filePath: string, name?: string): void;
   compressTo(outFilePath: string): Promise<void>;
+  setProgressCallback(callback: (doneBytes: number) => (boolean | undefined)): void; // true (default) = progress, false = abort
+  setTotalCallback(callback: (totalBytes: number) => void): void;
 }
