@@ -1,6 +1,5 @@
-#include "system_error_fmt.hpp"
-
 #include <Windows.h>
+#include "system_error_fmt.hpp"
 
 std::string formatSystemError(std::system_error& error) {
   // FUCKING MICROSOFT uses their fucking ANSI fucking everywhere
@@ -15,7 +14,9 @@ std::string formatSystemError(std::system_error& error) {
   result += std::to_string(error.code().value());
   result += "] ";
 
-  if (error.code().category() != std::system_category()) {
+  if (error.code().category() != std::system_category() &&
+      std::string_view(error.code().category().name()) != "HRESULT"
+  ) {
     // don't do much shit
     result += error.what();
     return result;
