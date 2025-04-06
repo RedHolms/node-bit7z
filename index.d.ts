@@ -44,5 +44,5 @@ export class BitArchiveWriter {
   constructor(lib: Bit7zLibrary, format: BitInOutFormat);
   addDirectory(directoryPath: string): void;
   addFile(filePath: string, name?: string): void;
-  compressTo(outFilePath: string): void;
+  compressTo(outFilePath: string): Promise<void>;
 }

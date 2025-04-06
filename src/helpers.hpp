@@ -1,67 +1,74 @@
+#include "system_error_fmt.hpp"
+
+// Make single statement from multiple
+#define statement(...) do { __VA_ARGS__ } while(0)
+
 // Throw napi value as JS exception
-#define _NAPI_THROW(v) do { (v).ThrowAsJavaScriptException(); _NAPI_RET_VOID; } while(0)
+#define Nthrow(v) statement((v).ThrowAsJavaScriptException(); Nreturn_void;)
 
 // Catch all C++ exceptions and rethrow them as JS exceptions
-#define _NAPI_RETHROW_ALL                                       \
-  catch (std::system_error& exc) {                              \
-    _NAPI_THROW(Napi::Error::New(env, formatSystemError(exc))); \
-  }                                                             \
-  catch (std::exception& exc) {                                 \
-    _NAPI_THROW(Napi::Error::New(env, exc.what()));             \
-  }                                                             \
-  catch (...) {                                                 \
-    _NAPI_THROW(Napi::Error::New(env, "Unknown exception"));    \
+#define Nsafe_begin try
+#define Nsafe_end                                                \
+  catch (std::system_error& exc) {                               \
+    Nthrow(Napi::Error::New(__napienv, formatSystemError(exc))); \
+  }                                                              \
+  catch (std::exception& exc) {                                  \
+    Nthrow(Napi::Error::New(__napienv, exc.what()));             \
+  }                                                              \
+  catch (...) {                                                  \
+    Nthrow(Napi::Error::New(__napienv, "Unknown exception"));    \
   }
 
-// Execute expression and rethrow all thrown C++ exceptions as JS exceptions
-#define _NAPI_SAFE(expr) do { try { expr; } _NAPI_RETHROW_ALL } while(0)
-
-/// We can't return Undefined() in constructor, so use this guard
-static constexpr bool _inNAPIConstructor = false;
-#define _CONSTRUCTOR static constexpr bool _inNAPIConstructor  = true;
-
-#define _NAPI_RET_VOID do { if constexpr (_inNAPIConstructor) return; else return env.Undefined(); } while(0)
+// place at the top of any constructor
+#define Nconstructor static constexpr bool __constructor = true; int __argidx = 0; auto __napienv = info.Env()
+// place at the top of any other function
+#define Ncallback    static constexpr bool __constructor = false; int __argidx = 0; auto __napienv = info.Env()
+// return with no value from constructor/callback
+#define Nreturn_void statement(if constexpr (__constructor) return; else return __napienv.Undefined();)
 
 /// Type checkers
-// You should define "idx" variable set to 0 before using any of them
 
-#define _NUMBER(name)                                              \
-  if (!info[idx].IsNumber())                                       \
-    _NAPI_THROW(Napi::Error::New(env, #name " must be a number")); \
-  auto name ## _napival = info[idx].As<Napi::Number>();            \
-  auto name = (name ## _napival).Int64Value(); ++idx
+// int64_t
+#define Nnumber_arg(name)                                                \
+  if (!info[__argidx].IsNumber())                                        \
+    Nthrow(Napi::Error::New(__napienv, #name " must be a number"));      \
+  auto name = info[__argidx].As<Napi::Number>().Int64Value(); ++__argidx
 
-#define _STRING(name)                                              \
-  if (!info[idx].IsString())                                       \
-    _NAPI_THROW(Napi::Error::New(env, #name " must be a string")); \
-  auto name ## _napival = info[idx].As<Napi::String>();            \
-  auto name = (name ## _napival).Utf8Value(); ++idx
+// std::string
+#define Nstring_arg(name)                                               \
+  if (!info[__argidx].IsString())                                       \
+    Nthrow(Napi::Error::New(__napienv, #name " must be a string"));     \
+  auto name = info[__argidx].As<Napi::String>().Utf8Value(); ++__argidx
 
-#define _STRING_OPT(name,...)                                             \
-  std::string name{__VA_ARGS__};                                          \
-  Napi::String name ## _napival;                                          \
-  if (info[idx].IsString())                                               \
-    name = (name ## _napival = info[idx].As<Napi::String>()).Utf8Value(); \
-  ++idx
+// std::string
+#define Nstring_arg_opt(name,...)                         \
+  std::string name{__VA_ARGS__};                          \
+  if (info[__argidx].IsString())                          \
+    name = info[__argidx].As<Napi::String>().Utf8Value(); \
+  ++__argidx
 
-#define _CLASS(name,cls)                                                       \
-  if (!info[idx].IsObject() || !cls::IsInstance(info[idx].As<Napi::Object>())) \
-    _NAPI_THROW(Napi::Error::New(env, #name " must be a " #cls));              \
-  auto name = info[idx].As<Napi::Object>(); ++idx
+// T*
+#define Nclass_arg(name,T)                                             \
+  if (!info[__argidx].IsObject() ||                                    \
+      !T::IsInstance(info[__argidx].As<Napi::Object>()))               \
+    Nthrow(Napi::Error::New(__napienv, #name " must be " #T));         \
+  auto name = T::Unwrap(info[__argidx].As<Napi::Object>()); ++__argidx
 
-/// Staticly allocated space for object
+/// =====
+
+// Staticly allocated space for object
 template <class T>
-class TStorage {
+class ObjectStorage {
 private:
   bool m_initialized;
   alignas(T) char m_data[sizeof(T)];
 
 public:
-  constexpr TStorage() : m_initialized(false) {}
-  inline ~TStorage() { destruct(); }
+  constexpr ObjectStorage() : m_initialized(false) {}
+  inline ~ObjectStorage() { destruct(); }
 
-  inline operator T&() const noexcept { return *(T*)m_data; }
   inline T* operator->() const noexcept { return (T*)m_data; }
+  inline T& get() const noexcept { return *(T*)m_data; }
 
   template <typename... ArgsT>
   inline void construct(ArgsT&&... args) {
@@ -77,60 +84,35 @@ public:
   }
 };
 
-static constexpr uint8_t hexCharToNum(char chr) {
-  if (chr >= '0' && chr <= '9')
-    return chr - '0';
-  if (chr >= 'a')
-    return (chr - 'a') + 10;
-  return 0;
-}
+/// Tools to build C++ classes wrappers for bit7z
 
-// assume that uuidStr is valid 12345678-9abc-def0-1234-56789abcdef0 type string
-//  all chars are lowercase
-static constexpr napi_type_tag initTagFromStr(const char* uuidStr) {
-  napi_type_tag result = { 0 };
-  uint8_t offset = 0;
-  while (*uuidStr) {
-    if (*uuidStr == '-') ++uuidStr;
-    uint8_t byte = (hexCharToNum(uuidStr[0]) << 4) | hexCharToNum(uuidStr[1]);
-    if (offset < 64)
-      result.lower |= (uint64_t)byte << offset;
-    else
-      result.upper |= (uint64_t)byte << (offset - 64);
-    offset += 8;
-    uuidStr += 2;
-  }
-  return result;
-}
 
-#define _INIT(...) _NAPI_SAFE(m.construct(__VA_ARGS__))
+#define _Wrapper_(C,...)                                                      \
+private:                                                                      \
+  ObjectStorage<bit7z::C> m;                                                  \
+  static inline Napi::FunctionReference* __Constructor = nullptr;             \
+public:                                                                       \
+  static inline std::vector<Napi::FunctionReference*> __Children = {};        \
+  inline operator bit7z::C&() const noexcept { return m.get(); }              \
+  static inline bool IsInstance(Napi::Object const& object) {                 \
+    if (object.InstanceOf(__Constructor->Value())) return true;               \
+    for (auto c : __Children) if (object.InstanceOf(c->Value())) return true; \
+    return false;                                                             \
+  }                                                                           \
+  static inline Napi::Object Init(Napi::Env env, Napi::Object exports) {      \
+    Napi::Function clazz = DefineClass(env, #C, __VA_ARGS__);                 \
+    __Constructor = new Napi::FunctionReference();                            \
+    *__Constructor = Napi::Persistent(clazz);                                 \
+    env.SetInstanceData<Napi::FunctionReference>(__Constructor);              \
+    exports.Set(#C, clazz);                                                   \
+    __RegAsChild();                                                           \
+    return exports;                                                           \
+  }                                                                           \
+  static void inline __RegAsChild() { 
 
-/// Layout for Napi::ObjectWrap<...>, also initialization of unique tags for
-///  type cheking. If class is inherited from another, use _BIT7Z_WRAPPER_DERIVED
-///  !!! Actual class (ObjectWrap) should not be derived
+#define Wrapper(C,...)  _Wrapper_(C,__VA_ARGS__)
+#define Wmethod(Fn) InstanceMethod<&Fn>(#Fn, static_cast<napi_property_attributes>(napi_writable | napi_configurable))
+#define Wderive(From)   From::__Children.push_back(__Constructor);
+#define Wend            }
 
-#define _BIT7Z_WRAPPER_BASE_(cls,addinit,...)                                       \
-  TStorage<bit7z::cls> m;                                                           \
-public:                                                                             \
-  static inline Napi::FunctionReference* CONSTRUCTOR = nullptr;                     \
-  static inline std::vector<Napi::FunctionReference*> CHILDREN = {};                \
-  inline operator bit7z::cls&() const noexcept { return m; }                        \
-  static inline bool IsInstance(Napi::Object const& object) {                       \
-    if (object.InstanceOf(CONSTRUCTOR->Value())) return true;                       \
-    for (auto child : CHILDREN) if (object.InstanceOf(child->Value())) return true; \
-    return false;                                                                   \
-  }                                                                                 \
-  static Napi::Object Init(Napi::Env env, Napi::Object exports) {                   \
-    Napi::Function clazz = DefineClass(env, #cls, __VA_ARGS__);                     \
-    CONSTRUCTOR = new Napi::FunctionReference();                                    \
-    *CONSTRUCTOR = Napi::Persistent(clazz);                                         \
-    env.SetInstanceData<Napi::FunctionReference>(CONSTRUCTOR);                      \
-    exports.Set(#cls, clazz);                                                       \
-    addinit                                                                         \
-    return exports;                                                                 \
-  }                                                                                               
-
-#define _BIT7Z_WRAPPER(cls,...) _BIT7Z_WRAPPER_BASE_(cls,;,__VA_ARGS__)
-#define _BIT7Z_WRAPPER_DERIVED(cls,parent,...) _BIT7Z_WRAPPER_BASE_(cls,parent::CHILDREN.push_back(CONSTRUCTOR);,__VA_ARGS__)
-
-#define _METHOD(name) InstanceMethod<&name>(#name, static_cast<napi_property_attributes>(napi_writable | napi_configurable))
+#define Winit(...)  statement(Nsafe_begin { m.construct(__VA_ARGS__); } Nsafe_end)

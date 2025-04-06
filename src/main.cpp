@@ -2,91 +2,127 @@
 #include <bit7z/bit7zlibrary.hpp>
 #include <bit7z/bitarchivewriter.hpp>
 #include <bit7z/bitformat.hpp>
-#include "system_error_fmt.hpp"
 #include "helpers.hpp"
 
+template <typename WorkFnT>
+class Bit7ZGenericWorker : public Napi::AsyncWorker {
+private:
+  Napi::Promise::Deferred m_deferred;
+  WorkFnT m_work;
+
+public:
+  inline Bit7ZGenericWorker(const Napi::Env& env, const WorkFnT& work) : Napi::AsyncWorker(env), m_deferred(env), m_work(work) {}
+
+public:
+  inline Napi::Promise GetPromise() { return m_deferred.Promise(); }
+
+protected:
+  void Execute() {
+    try {
+      m_work();
+    }
+    catch (std::system_error& exc) {
+      SetError(formatSystemError(exc));
+    }
+    catch (std::exception& exc) {
+      SetError(exc.what());
+    }
+    catch (...) {
+      SetError("Unknown exception");
+    }
+  }
+
+  void OnOK() {
+    m_deferred.Resolve(Env().Undefined());
+  }
+  void OnError(const Napi::Error& error) {
+    m_deferred.Reject(error.Value());
+  }
+};
+
 class BitInFormat : public Napi::ObjectWrap<BitInFormat> {
-  _BIT7Z_WRAPPER(BitInFormat, {})
+  Wrapper(BitInFormat, {})
+  Wend
 
 public:
   BitInFormat(const Napi::CallbackInfo& info) : Napi::ObjectWrap<BitInFormat>(info) {
-    _CONSTRUCTOR;
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _NUMBER(value);
-    _INIT(value);
+    Nconstructor;
+    Nnumber_arg(value);
+    Winit(value);
   }
 };
 
 class BitInOutFormat : public Napi::ObjectWrap<BitInOutFormat> {
-  _BIT7Z_WRAPPER_DERIVED(BitInOutFormat, BitInFormat, {})
+  Wrapper(BitInOutFormat, {})
+    Wderive(BitInFormat)
+  Wend
 
 public:
   BitInOutFormat(const Napi::CallbackInfo& info) : Napi::ObjectWrap<BitInOutFormat>(info) {
-    _CONSTRUCTOR;
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _NUMBER(value);
-    _STRING(ext);
-    _NUMBER(defaultMethod);
-    _NUMBER(features);
-    _INIT(value, ext.c_str(), (bit7z::BitCompressionMethod)defaultMethod, (bit7z::FormatFeatures)features);
+    Nconstructor;
+    Nnumber_arg(value);
+    Nstring_arg(ext);
+    Nnumber_arg(defaultMethod);
+    Nnumber_arg(features);
+    Winit(value, ext.c_str(), (bit7z::BitCompressionMethod)defaultMethod, (bit7z::FormatFeatures)features);
   }
 };
 
 class Bit7zLibrary : public Napi::ObjectWrap<Bit7zLibrary> {
-  _BIT7Z_WRAPPER(Bit7zLibrary, {})
+  Wrapper(Bit7zLibrary, {})
+  Wend
 
 public:
   Bit7zLibrary(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Bit7zLibrary>(info) {
-    _CONSTRUCTOR;
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _STRING(dllName);
-    _INIT(dllName);
+    Nconstructor;
+    Nstring_arg(dllName);
+    Winit(dllName);
   }
 };
 
 class BitArchiveWriter : public Napi::ObjectWrap<BitArchiveWriter> {
-  _BIT7Z_WRAPPER(BitArchiveWriter, {
-    _METHOD(addDirectory),
-    _METHOD(addFile),
-    _METHOD(compressTo)
+  Wrapper(BitArchiveWriter, {
+    Wmethod(addDirectory),
+    Wmethod(addFile),
+    Wmethod(compressTo)
   })
+  Wend
 
 public:
   BitArchiveWriter(const Napi::CallbackInfo& info) : Napi::ObjectWrap<BitArchiveWriter>(info) {
-    _CONSTRUCTOR;
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _CLASS(lib, Bit7zLibrary);
-    _CLASS(format, BitInOutFormat);
-    _INIT(*Bit7zLibrary::Unwrap(lib), *BitInOutFormat::Unwrap(format));
+    Nconstructor;
+    Nclass_arg(lib, Bit7zLibrary);
+    Nclass_arg(format, BitInOutFormat);
+    Winit(*lib, *format);
   }
 
   Napi::Value addDirectory(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _STRING(directoryPath);
-    _NAPI_SAFE(m->addDirectory(directoryPath));
-    return env.Undefined();
+    Ncallback;
+    Nstring_arg(directoryPath);
+    Nsafe_begin {
+      m->addDirectory(directoryPath);
+    } Nsafe_end
+    return info.Env().Undefined();
   }
 
   Napi::Value addFile(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _STRING(filePath);
-    _STRING_OPT(name);
-    _NAPI_SAFE(m->addFile(filePath, name));
-    return env.Undefined();
+    Ncallback;
+    Nstring_arg(filePath);
+    Nstring_arg_opt(name);
+    Nsafe_begin {
+      m->addFile(filePath, name);
+    } Nsafe_end
+    return info.Env().Undefined();
   }
 
   Napi::Value compressTo(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-    int idx = 0;
-    _STRING(outFilePath);
-    _NAPI_SAFE(m->compressTo(outFilePath));
-    return env.Undefined();
+    Ncallback;
+    Nstring_arg(outFilePath);
+    auto work = new Bit7ZGenericWorker(info.Env(), [this, outFilePath]() {
+      m->compressTo(outFilePath);
+    });
+    work->Queue();
+    return work->GetPromise();
   }
 };
 
