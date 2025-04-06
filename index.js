@@ -1,4 +1,23 @@
-const lib = require("bindings")("7zlib-impl");
-module.exports = exports = lib;
+import lib from "./index.cjs";
 
-// todo some additions?
+export default lib;
+
+const {
+  BitInFormat,
+  BitCompressionMethod,
+  FormatFeatures,
+  BitInOutFormat,
+  BitFormat,
+  Bit7zLibrary,
+  BitArchiveWriter
+} = lib;
+
+export {
+  BitInFormat,
+  BitCompressionMethod,
+  FormatFeatures,
+  BitInOutFormat,
+  BitFormat,
+  Bit7zLibrary,
+  BitArchiveWriter
+};

@@ -16,7 +16,10 @@
         }
       },
       "sources": [
-        "src/main.cpp"
+        "src/main.cpp",
+        "src/system_error_fmt.cpp",
+        "src/system_error_fmt.hpp",
+        "src/helpers.hpp"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
