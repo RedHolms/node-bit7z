@@ -40,11 +40,14 @@ export class Bit7zLibrary {
   constructor(dllName: string);
 }
 
+export type ProgressCallback = (doneBytes: number) => boolean | void;
+export type TotalCallback = (totalBytes: number) => void;
+
 export class BitArchiveWriter {
   constructor(lib: Bit7zLibrary, format: BitInOutFormat);
   addDirectory(directoryPath: string): void;
   addFile(filePath: string, name?: string): void;
   compressTo(outFilePath: string): Promise<void>;
-  setProgressCallback(callback: (doneBytes: number) => (boolean | undefined)): void; // true (default) = progress, false = abort
-  setTotalCallback(callback: (totalBytes: number) => void): void;
+  setProgressCallback(callback: ProgressCallback): void; // true (default) = progress, false = abort
+  setTotalCallback(callback: TotalCallback): void;
 }
