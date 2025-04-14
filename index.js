@@ -3,21 +3,35 @@ import lib from "./index.cjs";
 export default lib;
 
 const {
-  BitInFormat,
+  ArchiveStartOffset,
+  BitCompressionLevel,
   BitCompressionMethod,
+  FilterPolicy,
   FormatFeatures,
+  OverwriteMode,
+  UpdateMode,
+  Bit7zLibrary,
+  BitInFormat,
   BitInOutFormat,
   BitFormat,
-  Bit7zLibrary,
-  BitArchiveWriter
+  BitArchiveWriter,
+  DeletePolicy,
+  BitArchiveEditor
 } = lib;
 
 export {
-  BitInFormat,
+  ArchiveStartOffset,
+  BitCompressionLevel,
   BitCompressionMethod,
+  FilterPolicy,
   FormatFeatures,
+  OverwriteMode,
+  UpdateMode,
+  Bit7zLibrary,
+  BitInFormat,
   BitInOutFormat,
   BitFormat,
-  Bit7zLibrary,
-  BitArchiveWriter
+  BitArchiveWriter,
+  DeletePolicy,
+  BitArchiveEditor
 };

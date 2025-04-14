@@ -26,6 +26,8 @@
 // return with no value from constructor/callback
 #define Nreturn_void statement(if constexpr (__constructor) return; else return __napienv.Undefined();)
 
+#define Nenv __napienv
+
 /// Type checkers
 
 // int64_t
@@ -62,34 +64,6 @@
 
 /// =====
 
-// Staticly allocated space for object
-template <class T>
-class ObjectStorage {
-private:
-  bool m_initialized;
-  alignas(T) char m_data[sizeof(T)];
-
-public:
-  constexpr ObjectStorage() : m_initialized(false) {}
-  inline ~ObjectStorage() { destruct(); }
-
-  inline T* operator->() const noexcept { return (T*)m_data; }
-  inline T& get() const noexcept { return *(T*)m_data; }
-
-  template <typename... ArgsT>
-  inline void construct(ArgsT&&... args) {
-    if (m_initialized) return;
-    m_initialized = true;
-    new (m_data) T (std::forward<ArgsT>(args)...);
-  }
-
-  inline void destruct() {
-    if (!m_initialized) return;
-    m_initialized = false;
-    ((T*)m_data)->~T();
-  }
-};
-
 // Calls any function at scope exit
 template <typename FnT>
 class ScopeExit {
@@ -102,32 +76,61 @@ public:
 
 /// Tools to build C++ classes wrappers for bit7z
 
-#define _Wrapper_(C,...)                                                      \
-private:                                                                      \
-  ObjectStorage<bit7z::C> m;                                                  \
-  static inline Napi::FunctionReference* __Constructor = nullptr;             \
+// storage of bit7z object
+template <class T>
+class Bit7ZObject {
+private:
+  alignas(T) char m_data[sizeof(T)];
+  bool m_initialized;
+
+public:
+  constexpr Bit7ZObject() : m_initialized(false) {}
+  inline ~Bit7ZObject() { destruct(); }
+
+  inline T* _obj() const noexcept { return (T*)m_data; }
+  inline T* operator->() const noexcept { return _obj(); }
+
+  template <typename... ArgsT>
+  inline void construct(ArgsT&&... args) {
+    if (m_initialized) return;
+    m_initialized = true;
+    new (m_data) T(std::forward<ArgsT>(args)...);
+  }
+
+  inline void destruct() {
+    if (!m_initialized) return;
+    m_initialized = false;
+    ((T*)m_data)->~T();
+  }
+};
+
+#define HeadBit7zWrapper(C)                                                   \
+  using PropertiesList = std::vector<Napi::ClassPropertyDescriptor<C>>;       \
 public:                                                                       \
   static inline std::vector<Napi::FunctionReference*> __Children = {};        \
-  inline operator bit7z::C&() const noexcept { return m.get(); }              \
+  bit7z::C* getObj() { return m._obj(); }                                     \
+  static inline Napi::Object Init(Napi::Env env, Napi::Object exports) {      \
+    PropertiesList props;                                                     \
+    __Derive();                                                               \
+    RegisterProperties(props);                                                \
+    Napi::Function clazz = DefineClass(env, #C, std::move(props));            \
+    __Constructor = new Napi::FunctionReference();                            \
+    *__Constructor = Napi::Persistent(clazz);                                 \
+    env.SetInstanceData<Napi::FunctionReference>(__Constructor);              \
+    exports.Set(#C, clazz);                                                   \
+    return exports;                                                           \
+  }                                                                           \
   static inline bool IsInstance(Napi::Object const& object) {                 \
     if (object.InstanceOf(__Constructor->Value())) return true;               \
     for (auto c : __Children) if (object.InstanceOf(c->Value())) return true; \
     return false;                                                             \
   }                                                                           \
-  static inline Napi::Object Init(Napi::Env env, Napi::Object exports) {      \
-    Napi::Function clazz = DefineClass(env, #C, __VA_ARGS__);                 \
-    __Constructor = new Napi::FunctionReference();                            \
-    *__Constructor = Napi::Persistent(clazz);                                 \
-    env.SetInstanceData<Napi::FunctionReference>(__Constructor);              \
-    exports.Set(#C, clazz);                                                   \
-    __RegAsChild();                                                           \
-    return exports;                                                           \
-  }                                                                           \
-  static void inline __RegAsChild() { 
+private:                                                                      \
+  Bit7ZObject<bit7z::C> m;                                                    \
+  static inline Napi::FunctionReference* __Constructor = nullptr;             \
+  static inline void __Derive()
 
-#define Wrapper(C,...)  _Wrapper_(C,__VA_ARGS__)
-#define Wmethod(Fn) InstanceMethod<&Fn>(#Fn, static_cast<napi_property_attributes>(napi_writable | napi_configurable))
-#define Wderive(From)   From::__Children.push_back(__Constructor);
-#define Wend            }
+#define METHOD(Fn)   InstanceMethod<&Fn>(#Fn, static_cast<napi_property_attributes>(napi_writable | napi_configurable))
+#define DERIVE(From) From::__Children.push_back(__Constructor)
 
-#define Winit(...)  statement(Nsafe_begin { m.construct(__VA_ARGS__); } Nsafe_end)
+#define Bit7zWrapperInit(...) statement(Nsafe_begin { m.construct(__VA_ARGS__); } Nsafe_end)
