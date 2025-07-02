@@ -4,6 +4,7 @@
 #include <bit7z/bitarchivewriter.hpp>
 #include <bit7z/bitarchiveeditor.hpp>
 #include <bit7z/bitformat.hpp>
+#include <bit7z/bitfileextractor.hpp>
 #include "helpers.hpp"
 
 template <typename WorkFnT>
@@ -413,12 +414,41 @@ public:
   }
 };
 
+class BitFileExtractor : public Napi::ObjectWrap<BitFileExtractor>, public BitCallbacks {
+  HeadBit7zWrapper(BitFileExtractor) {
+  }
+
+public:
+  static inline void RegisterProperties(PropertiesList& properties) {
+    properties.push_back(METHOD(extract));
+  }
+
+  BitFileExtractor(const Napi::CallbackInfo& info) : Napi::ObjectWrap<BitFileExtractor>(info) {
+    Nconstructor;
+    Nclass_arg(lib, Bit7zLibrary);
+    Nclass_arg(format, BitInOutFormat);
+    Bit7zWrapperInit(*lib->getObj(), *format->getObj());
+  }
+
+  Napi::Value extract(const Napi::CallbackInfo& info) {
+    Ncallback;
+    Nstring_arg(archivePath);
+    Nstring_arg(destDirPath);
+    auto work = new Bit7ZGenericWorker(info.Env(), [this, archivePath, destDirPath]() {
+      m->extract(archivePath, destDirPath);
+    });
+    work->Queue();
+    return work->GetPromise();
+  }
+};
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   BitInFormat::Init(env, exports);
   BitInOutFormat::Init(env, exports);
   Bit7zLibrary::Init(env, exports);
   BitArchiveWriter::Init(env, exports);
   BitArchiveEditor::Init(env, exports);
+  BitFileExtractor::Init(env, exports);
   return exports;
 }
 

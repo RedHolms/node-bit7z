@@ -78,7 +78,7 @@ export namespace BitFormat {
   const SevenZip: BitInOutFormat;
 }
 
-export abstract class BitAbstractArchiveHandler {
+export interface BitAbstractArchiveHandler {
   clearPassword(): void;
   fileCallback(): FileCallback;
   format(): BitInFormat;
@@ -101,7 +101,7 @@ export abstract class BitAbstractArchiveHandler {
   totalCallback(): TotalCallback;
 }
 
-export abstract class BitAbstractArchiveCreator extends BitAbstractArchiveHandler {
+export interface BitAbstractArchiveCreator extends BitAbstractArchiveHandler {
   compressionFormat(): BitInOutFormat;
   compressionLevel(): BitCompressionLevel;
   compressionMethod(): BitCompressionMethod;
@@ -127,22 +127,24 @@ export abstract class BitAbstractArchiveCreator extends BitAbstractArchiveHandle
   wordSize(): number;
 }
 
-export abstract class BitOutputArchive {
+export interface BitOutputArchive {
   addDirectory(directoryPath: string): void;
   addDirectoryContents(directoryPath: string, filter: string, recursive: boolean): void;
   addDirectoryContents(
-    directoryPath: string, filter: string = "*",
-    policy: FilterPolicy = FilterPolicy.Include,
-    recursive: boolean = true
+    directoryPath: string,
+    filter?: string, // "*" by default
+    policy?: FilterPolicy, // FilterPolicy.Include by default
+    recursive?: boolean // true by default
   ): void;
   addFile(content: Buffer, name: string): void;
   addFile(filePath: string, name?: string): void;
   addFiles(filesPaths: string[]): void;
   addFiles(directoryPath: string, filter: string, recursive: boolean): void;
   addFiles(
-    directoryPath: string, filter: string = "*",
-    policy: FilterPolicy = FilterPolicy.Include,
-    recursive: boolean = true
+    directoryPath: string,
+    filter?: string, // "*" by default
+    policy?: FilterPolicy, // FilterPolicy.Include by default
+    recursive?: boolean // true by default
   ): void;
   addItems(items: [filePath: string, nameInArchive: string][]): void;
   addItems(filesPaths: string[]): void;
@@ -152,43 +154,84 @@ export abstract class BitOutputArchive {
   itemsCount(): number;
 }
 
-// bit7z is C++ library and in C++ we can extend multiple classes at once, but not in typescript, so here is workaround
-abstract class BitAbstractArchiveCreator_N_BitOutputArchive extends BitAbstractArchiveCreator {
-  addDirectory(directoryPath: string): void;
-  addDirectoryContents(directoryPath: string, filter: string, recursive: boolean): void;
-  addDirectoryContents(
-    directoryPath: string, filter: string = "*",
-    policy: FilterPolicy = FilterPolicy.Include,
-    recursive: boolean = true
-  ): void;
-  addFile(content: Buffer, name: string): void;
-  addFile(filePath: string, name?: string): void;
-  addFiles(filesPaths: string[]): void;
-  addFiles(directoryPath: string, filter: string, recursive: boolean): void;
-  addFiles(
-    directoryPath: string, filter: string = "*",
-    policy: FilterPolicy = FilterPolicy.Include,
-    recursive: boolean = true
-  ): void;
-  addItems(items: [filePath: string, nameInArchive: string][]): void;
-  addItems(filesPaths: string[]): void;
-  compressTo(outFilePath: string): Promise<void>;
-  creator(): BitAbstractArchiveCreator;
-  handler(): BitAbstractArchiveHandler;
-  itemsCount(): number;
-}
-
-export class BitArchiveWriter extends BitAbstractArchiveCreator_N_BitOutputArchive {
+export class BitArchiveWriter implements BitAbstractArchiveCreator, BitOutputArchive {
   constructor(lib: Bit7zLibrary, format: BitInOutFormat);
   constructor(
     lib: Bit7zLibrary, archiveFilePath: string,
     startOffset: ArchiveStartOffset,
-    format: BitInOutFormat, password: string = ""
+    format: BitInOutFormat, password?: string
   );
   constructor(
     lib: Bit7zLibrary, archiveFilePath: string,
-    format: BitInOutFormat, password: string = ""
+    format: BitInOutFormat, password?: string
   );
+  clearPassword(): void;
+  fileCallback(): FileCallback;
+  format(): BitInFormat;
+  isPasswordDefined(): boolean;
+  library(): Bit7zLibrary;
+  overwriteMode(): OverwriteMode;
+  password(): string;
+  passwordCallback(): PasswordCallback;
+  progressCallback(): ProgressCallback;
+  ratioCallback(): RatioCallback;
+  retainDirectories(): boolean;
+  setFileCallback(callback: FileCallback): void;
+  setOverwriteMode(mode: OverwriteMode): void;
+  setPassword(password: string): void;
+  setPasswordCallback(callback: PasswordCallback): void;
+  setProgressCallback(callback: ProgressCallback): void;
+  setRatioCallback(callback: RatioCallback): void;
+  setRetainDirectories(retain: boolean): void;
+  setTotalCallback(callback: TotalCallback): void;
+  totalCallback(): TotalCallback;
+  compressionFormat(): BitInOutFormat;
+  compressionLevel(): BitCompressionLevel;
+  compressionMethod(): BitCompressionMethod;
+  cryptHeaders(): boolean;
+  dictionarySize(): number;
+  setCompressionLevel(level: BitCompressionLevel): void;
+  setCompressionMethod(method: BitCompressionMethod): void;
+  setDictionarySize(dictionarySize: number): void;
+  // setFormatProperty( const wchar_t( &name )[N], const T& value ) noexcept
+  // setFormatProperty( const wchar_t( &name )[N], T value ) noexcept
+  setSolidMode(solidMode: boolean): void;
+  setStoreSymbolicLinks(storeSymlinks: boolean): void;
+  setThreadsCount(threadsCount: number): void;
+  setUpdateMode(canUpdate: boolean): void;
+  setUpdateMode(mode: UpdateMode): void;
+  setVolumeSize(volumeSize: number): void;
+  setWordSize(wordSize: number): void;
+  solidMode(): boolean;
+  storeSymbolicLinks(): boolean;
+  threadsCount(): number;
+  updateMode(): UpdateMode;
+  volumeSize(): number;
+  wordSize(): number;
+  addDirectory(directoryPath: string): void;
+  addDirectoryContents(directoryPath: string, filter: string, recursive: boolean): void;
+  addDirectoryContents(
+    directoryPath: string,
+    filter?: string, // "*" by default
+    policy?: FilterPolicy, // FilterPolicy.Include by default
+    recursive?: boolean // true by default
+  ): void;
+  addFile(content: Buffer, name: string): void;
+  addFile(filePath: string, name?: string): void;
+  addFiles(filesPaths: string[]): void;
+  addFiles(directoryPath: string, filter: string, recursive: boolean): void;
+  addFiles(
+    directoryPath: string,
+    filter?: string, // "*" by default
+    policy?: FilterPolicy, // FilterPolicy.Include by default
+    recursive?: boolean // true by default
+  ): void;
+  addItems(items: [filePath: string, nameInArchive: string][]): void;
+  addItems(filesPaths: string[]): void;
+  compressTo(outFilePath: string): Promise<void>;
+  creator(): BitAbstractArchiveCreator;
+  handler(): BitAbstractArchiveHandler;
+  itemsCount(): number;
 }
 
 export enum DeletePolicy {
@@ -199,14 +242,18 @@ export enum DeletePolicy {
 export class BitArchiveEditor extends BitArchiveWriter {
   constructor(
     lib: Bit7zLibrary, archiveFilePath: string,
-    format: BitInOutFormat, password: string = ""
+    format: BitInOutFormat, password?: string
   );
-  setUpdateMode(mode: UpdateMode): void;
   renameItem(index: number, newPath: string): void;
   renameItem(oldPath: string, newPath: string): void;
   updateItem(index: number, inputFilePath: string): void;
   updateItem(itemPath: string, inputFilePath: string): void;
-  deleteItem(index: number, policy: DeletePolicy = DeletePolicy.ItemOnly): void;
-  deleteItem(itemPath: string, policy: DeletePolicy = DeletePolicy.ItemOnly): void;
+  deleteItem(index: number, policy: DeletePolicy): void; // default policy is DeletePolicy.ItemOnly
+  deleteItem(itemPath: string, policy: DeletePolicy): void; // default policy is DeletePolicy.ItemOnly
   applyChanges(): Promise<void>;
+}
+
+export class BitFileExtractor {
+  constructor(lib: Bit7zLibrary, format: BitInFormat);
+  extract(archivePath: string, destDirPath: string): Promise<void>;
 }

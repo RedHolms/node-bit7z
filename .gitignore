@@ -1,3 +1,5 @@
 node_modules/
 build/
 /7za.dll
+/7z.dll
+test.unpacked

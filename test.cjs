@@ -3,7 +3,7 @@ const bit7z = require(".");
 
 (async () => {
   try {
-    const lib = new bit7z.Bit7zLibrary("7za.dll");
+    const lib = new bit7z.Bit7zLibrary("7z.dll");
 
     if (!existsSync("test.7z")) {
       const writer = new bit7z.BitArchiveWriter(lib, bit7z.BitFormat.SevenZip);
@@ -22,9 +22,15 @@ const bit7z = require(".");
       console.log("compressed test.7z");
     }
     else {
-      const editor = new bit7z.BitArchiveEditor(lib, "test.7z", bit7z.BitFormat.SevenZip);
-      editor.updateItem("index.js", "code.js");
-      await editor.applyChanges();
+      const extractor = new bit7z.BitFileExtractor(lib, bit7z.BitFormat.SevenZip);
+
+      console.log("unpacking");
+      await extractor.extract("test.7z", "test.unpacked");
+      console.log("unpacked");
+
+      // const editor = new bit7z.BitArchiveEditor(lib, "test.7z", bit7z.BitFormat.SevenZip);
+      // editor.updateItem("index.js", "code.js");
+      // await editor.applyChanges();
     }
   }
   catch(error) {
